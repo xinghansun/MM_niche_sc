@@ -1,0 +1,16 @@
+# ignore data and results folder
+/data/
+/results/
+
+# ignore log files
+*.log
+.Rhistory
+
+# ignore Jupyter notebook checkpoint files
+.ipynb_checkpoints
+software/pyscenic/aldinger_RL.ipynb
+software/pyscenic/vladoiu_mb.ipynb
+*.ipynb
+
+# ignore RDS object files
+*.[Rr][Dd][Ss]
