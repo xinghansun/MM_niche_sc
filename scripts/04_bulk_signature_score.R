@@ -105,3 +105,18 @@ zph <- cox.zph(cox_multi_group)
 print(zph)
 plot(zph)
 
+
+# Save model for validation
+myeloid_model <- list(
+  gene_signature = final_genes$State_Score, 
+  risk_cutoff = res.cut$cutpoint$cutpoint,
+  gsva_params = list(
+    kcdf = "Gaussian",
+    absRanking = FALSE
+  ),
+  source_note = "Derived from GSE136337 using surv_cutpoint maxstat"
+)
+saveRDS(myeloid_model, "../results/Myeloid_State_Risk_Model.rds")
+
+
+
