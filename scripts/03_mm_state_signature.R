@@ -1,3 +1,5 @@
+source("./utils.R")
+
 suppressPackageStartupMessages({
   library(Seurat)
   library(dplyr)
@@ -7,12 +9,16 @@ suppressPackageStartupMessages({
   library(harmony)
   library(ggplot2)
   library(ggrepel)
+  library(SingleR)
+  library(celldex)
+  library(patchwork)
+  library(ggpubr)
 })
 
-
 dir.create("../results/", recursive = TRUE, showWarnings = FALSE)
-myeloid_labels <- c("Monocyte", "Macrophage", "DC", "Neutrophils")
+dir.create("../results/figures", recursive = TRUE, showWarnings = FALSE)
 
+myeloid_labels <- c("Monocyte", "Macrophage", "DC", "Neutrophils")
 
 # Define gene sets for state scoring
 AP_GENES_REF <- c(
@@ -80,19 +86,43 @@ combined <- RunUMAP(combined, reduction = "harmony", dims = 1:50)
 combined <- FindNeighbors(combined, reduction = "harmony", dims = 1:50)
 combined <- FindClusters(combined, resolution = 0.3)
 
-DimPlot(combined, group.by = "orig.ident") # to check if batch effect is removed
-UMAPPlot(combined, label = TRUE)
+p <- DimPlot(combined, reduction = "umap", group.by = "orig.ident",
+             raster = FALSE)
+p <- clean_umap(p, title = "Harmony-integrated UMAP", subtitle = "Colored by sample")
+save_figure(
+  p,
+  "../results/figures",
+  "03_harmonyIntegrated_umap_by_batch_allCells",
+  width = 10, height = 5
+)
+
+p <- DimPlot(combined, reduction = "umap", label = TRUE, repel = TRUE, label.size = 4,
+             raster = FALSE)
+p <- clean_umap(p, 
+                title = "Harmony-integrated UMAP", 
+                subtitle = "Clusters") + NoLegend()
+save_figure(p, 
+            "../results/figures", 
+            "03_clustered_umap_allCells", 
+            width = 5.0, height = 4.2)
 
 
 # Extract myeloid cells
-library(SingleR)
-library(celldex)
 ref <- HumanPrimaryCellAtlasData() 
 pred <- SingleR(test = as.SingleCellExperiment(combined), 
                 ref = ref, labels = ref$label.main)
 combined$SingleR_labels <- pred$labels
 
-DimPlot(combined, group.by = "SingleR_labels") # based on SingleR annotation
+p <- DimPlot(combined, reduction = "umap", group.by = "SingleR_labels",
+             raster = F) # based on SingleR annotation
+p <- clean_umap(p, title = "Harmony-integrated UMAP", 
+                subtitle = "SingleR annotation")
+save_figure(p, 
+            "../results/figures", 
+            "03_clustered_umap_SingleR_allCells", 
+            width = 8.0, height = 5)
+
+
 tmp <- combined@meta.data
 table(tmp[tmp$SingleR_labels %in% myeloid_labels, "seurat_clusters"], 
       tmp[tmp$SingleR_labels %in% myeloid_labels,"SingleR_labels"])
@@ -106,8 +136,24 @@ combined <- AddModuleScore(
   features = list(myeloid_markers),
   name = "Myeloid_Score"
 ) # based on Myeloid Score 
-VlnPlot(combined, features = "Myeloid_Score1", group.by = "seurat_clusters")
+p <- VlnPlot(combined, features = "Myeloid_Score1", 
+             group.by = "seurat_clusters", pt.size = 0) +
+  theme(legend.position = "none") + 
+  ggtitle("Myeloid score") +
+  xlab("Cluster")
+save_figure(p, 
+            "../results/figures", 
+            "03_vln_myeloidScore_allCells", width = 7.0, height = 5)
+
 FeaturePlot(combined, features = "Myeloid_Score1")
+p <- FeaturePlot(combined, features = "Myeloid_Score1", raster = F)
+p <- p + coord_fixed() + 
+  theme_umap + 
+  labs(title = "Myeloid Score", x = "UMAP 1", y = "UMAP 2")
+save_figure(p, 
+            "../results/figures", 
+            "03_umap_myeloidScore_allCells", width = 5.0, height = 4.2)
+
 
 myeloid_obj <- subset(combined, idents = c(2, 9, 11))
 myeloid_obj$disease_stage <- case_when(
@@ -133,10 +179,37 @@ myeloid_obj <- RunUMAP(myeloid_obj, reduction = "harmony", dims = 1:30)
 myeloid_obj <- FindNeighbors(myeloid_obj, reduction = "harmony", dims = 1:30)
 myeloid_obj <- FindClusters(myeloid_obj, resolution = 0.2)
 
-DimPlot(myeloid_obj, group.by = "orig.ident")
+p <- DimPlot(myeloid_obj, reduction = "umap", group.by = "orig.ident",
+             raster = FALSE)
+p <- clean_umap(p, title = "Harmony-integrated UMAP", subtitle = "Colored by sample")
+save_figure(
+  p,
+  "../results/figures",
+  "03_harmonyIntegrated_umap_by_batch_myeloidCells",
+  width = 8, height = 5
+)
+
 DimPlot(myeloid_obj, group.by = "disease_stage")
+p <- DimPlot(myeloid_obj, reduction = "umap", group.by = "disease_stage",
+             raster = FALSE)
+p <- clean_umap(p, title = "Harmony-integrated UMAP", subtitle = "Colored by disease stage")
+save_figure(
+  p,
+  "../results/figures",
+  "03_harmonyIntegrated_umap_by_stage_myeloidCells",
+  width = 6, height = 5
+)
 
 UMAPPlot(myeloid_obj, label = TRUE)
+p <- DimPlot(myeloid_obj, reduction = "umap", label = TRUE, repel = TRUE, label.size = 4,
+             raster = FALSE)
+p <- clean_umap(p, 
+                title = "Harmony-integrated UMAP", 
+                subtitle = "Clusters") + NoLegend()
+save_figure(p, 
+            "../results/figures", 
+            "03_clustered_umap_myeloidCells", 
+            width = 5.0, height = 4.2)
 
 # Check cluster identity
 lineage_genes <- final_features <- c(
@@ -156,6 +229,22 @@ lineage_genes <- final_features <- c(
   "LILRA4"         
 )
 DotPlot(myeloid_obj, features = lineage_genes, group.by = "seurat_clusters") + coord_flip()
+p <- DotPlot(myeloid_obj, features = lineage_genes, group.by = "seurat_clusters", dot.scale = 5) +
+  coord_flip() +
+  scale_colour_gradient(low = "grey92", high = "black") +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
+    axis.text.y = element_text(size = 7),
+    axis.title.y = element_blank(),
+    legend.position = "right",
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 0.4)
+  ) +
+  ylab("Cluster")
+
+save_figure(p, 
+            "../results/figures", 
+            "03_dotPlot_lineageIdentGenes_myeloidCells", width = 7.6, height = 10)
+
 
 ref_data <- BlueprintEncodeData()
 pred_results <- SingleR(test = myeloid_obj@assays$RNA@data, 
@@ -211,19 +300,91 @@ myeloid_obj <- define_myeloid_states(myeloid_obj,
                                      ap_genes = AP_GENES, 
                                      sup_genes = SUP_GENES)
 
-FeaturePlot(myeloid_obj, 
-            features = c("AP_val", "SUP_val"), 
-            ncol = 2, cols = c("lightgrey", "red"))
+plist <- FeaturePlot(
+  myeloid_obj,
+  features = c("AP_val", "SUP_val"),
+  cols = c("grey95", "red3"),
+  combine = FALSE
+)
+plist <- lapply(plist, function(p) {
+  p +
+    coord_fixed() +
+    labs(x = "UMAP 1", y = "UMAP 2") +
+    theme(
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      legend.position = "right"
+    )
+})
+plist[[1]] <- plist[[1]] + ggtitle("AP Score")
+plist[[2]] <- plist[[2]] + ggtitle("SUP Score")
+p <- wrap_plots(plist, ncol = 2) +
+  plot_annotation(title = "Myeloid state scores")
+save_figure(p, 
+            "../results/figures", 
+            "03_umap_AP_SUP_scores_myeloidCells", width = 10, height = 5)
 
 VlnPlot(myeloid_obj, features = c("AP_val", "SUP_val"), pt.size = 0)
 
 DimPlot(myeloid_obj, 
         group.by = "functional_state")
+p <- DimPlot(
+  myeloid_obj,
+  reduction = "umap",
+  group.by = "functional_state",
+) +
+  coord_fixed() +
+  labs(title = "Myeloid functional states", x = "UMAP 1", y = "UMAP 2") +
+  theme(
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    legend.position = "right"
+  ) +
+  scale_color_discrete(
+    labels = c(
+      AP_high_Sup_high = "AP High, SUP High",
+      AP_high_Sup_low  = "AP High, SUP Low",
+      AP_low_Sup_high  = "AP Low, SUP High",
+      AP_low_Sup_low   = "AP Low, SUP Low"
+    )
+  ) + 
+  guides(color = guide_legend(override.aes = list(size = 2.6, alpha = 1)))
+save_figure(p, 
+            "../results/figures", 
+            "03_umap_functionalStates_myeloidCells", width = 6, height = 5)
 
 DimPlot(myeloid_obj, 
         group.by = "functional_state", 
         split.by = "disease_stage")
-
+p <- DimPlot(
+  myeloid_obj,
+  reduction = "umap",
+  group.by = "functional_state",
+  split.by = "disease_stage",
+) +
+  coord_fixed() +
+  labs(
+    title = "Myeloid functional states",
+    subtitle = "Split by disease stage",
+    x = "UMAP 1", y = "UMAP 2"
+  ) +
+  theme(
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    legend.position = "bottom"
+  ) +
+  scale_color_discrete(
+    labels = c(
+      AP_high_Sup_high = "AP High, SUP High",
+      AP_high_Sup_low  = "AP High, SUP Low",
+      AP_low_Sup_high  = "AP Low, SUP High",
+      AP_low_Sup_low   = "AP Low, SUP Low"
+    )
+  ) + 
+  guides(color = guide_legend(nrow = 1, override.aes = list(size = 2.6, alpha = 1)))
+save_figure(p, 
+            "../results/figures", 
+            "03_umap_functionalStates_by_stage_myeloidCells", width = 10, height = 4)
 
 # Check AP high SUP high distribution across disease stages
 # A. pooled distribution
@@ -235,16 +396,26 @@ prop_data <- myeloid_obj@meta.data %>%
 prop_data$disease_stage <- factor(prop_data$disease_stage, 
                                   levels = c("Normal", "MGUS", "SMM", "MM"))
 
-ggplot(prop_data, aes(x = disease_stage, y = percentage, fill = functional_state)) +
+p <- ggplot(prop_data, aes(x = disease_stage, y = percentage, fill = functional_state)) +
   geom_bar(stat = "identity", position = "stack", width = 0.7, color = "white") +
   scale_fill_manual(values = c("AP_high_Sup_high" = "#E41A1C",
                                "AP_high_Sup_low"  = "#4DAF4A",
                                "AP_low_Sup_high"  = "#377EB8",
-                               "AP_low_Sup_low"   = "#984EA3")) +
+                               "AP_low_Sup_low"   = "#984EA3"),
+                    labels = c(
+                      "AP_high_Sup_high" = "AP High, SUP High",
+                      "AP_high_Sup_low"  = "AP High, SUP Low",
+                      "AP_low_Sup_high"  = "AP Low, SUP High",
+                      "AP_low_Sup_low"   = "AP Low, SUP Low"
+                    )) +
   theme_classic() +
-  labs(title = "Proportion of Functional States across Stages",
+  labs(title = "Proportion of functional states across stages",
        x = "Disease Stage", y = "Proportion (%)", fill = "Functional State") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
+save_figure(p, 
+            "../results/figures", 
+            "03_bar_functionalStateDistribution_by_stage_myeloidCells", 
+            width = 7, height = 8)
 
 # B. Proportion test by sample
 sample_props <- myeloid_obj@meta.data %>%
@@ -253,20 +424,28 @@ sample_props <- myeloid_obj@meta.data %>%
   mutate(prop = count / sum(count)) %>%
   ungroup()
 
-library(ggpubr)
-
-ggplot(filter(sample_props, functional_state == "AP_high_Sup_high"), 
-       aes(x = disease_stage, y = prop, fill = disease_stage)) +
-  geom_boxplot(outlier.shape = NA)  + 
-  geom_jitter(width = 0.2, alpha = 0.6) +
-  stat_compare_means(method = "wilcox.test", 
-                     comparisons = list(c("Normal", "MM"), 
-                                        c("Normal", "SMM"),
-                                        c("Normal", "MGUS")
-                                        )) +
-  theme_classic() +
-  labs(title = "Proportion of AP_high-SUP_high per Sample", 
-       y = "Proportion")
+p <- ggplot(
+  filter(sample_props, functional_state == "AP_high_Sup_high"),
+  aes(x = disease_stage, y = prop, fill = disease_stage)
+) +
+  geom_boxplot(outlier.shape = NA, width = 0.6, linewidth = 0.35, alpha = 0.9) +
+  geom_jitter(width = 0.12, height = 0, size = 0.8, alpha = 0.5) +
+  stat_compare_means(
+    method = "wilcox.test",
+    comparisons = list(c("Normal", "MM"), c("Normal", "SMM"), c("Normal", "MGUS")),
+    label = "p.signif"
+  ) +
+  labs(
+    title = "AP-high / SUP-high proportion per sample",
+    x = NULL,
+    y = "Proportion"
+  ) +
+  theme_nature +
+  theme(legend.position = "none")
+save_figure(p, 
+            "../results/figures", 
+            "03_boxplot_APSupHigh_proportion_by_stage_myeloidCells", 
+            width = 5, height = 5)
 
 FeaturePlot(myeloid_obj, 
             features = c("AP_val", "SUP_val"), 
@@ -318,19 +497,39 @@ cluster_order <- cluster_dist %>%
 
 cluster_dist$seurat_clusters <- factor(cluster_dist$seurat_clusters, levels = cluster_order)
 
-ggplot(cluster_dist, aes(x = seurat_clusters, y = proportion, fill = functional_state)) +
-  geom_bar(stat = "identity", position = "stack", width = 0.8, color = "white") +
+p <- ggplot(cluster_dist, aes(x = seurat_clusters, y = proportion, fill = functional_state)) +
+  geom_bar(stat = "identity", width = 0.8, color = "white", linewidth = 0.25) +
   scale_fill_manual(values = c("AP_high_Sup_high" = "#E41A1C",
                                "AP_high_Sup_low"  = "#4DAF4A",
                                "AP_low_Sup_high"  = "#377EB8",
                                "AP_low_Sup_low"   = "#984EA3",
-                               "Intermediate"     = "#D3D3D3")) +
-  theme_classic() +
-  labs(title = "Distribution of Functional States across Myeloid Clusters",
-       x = "Seurat Cluster (Identity)", 
-       y = "Proportion", 
-       fill = "Functional State") +
-  theme(axis.text.x = element_text(face = "bold"))
+                               "Intermediate"     = "#D3D3D3"),
+                    labels = c(
+                      "AP_high_Sup_high" = "AP High, SUP High",
+                      "AP_high_Sup_low"  = "AP High, SUP Low",
+                      "AP_low_Sup_high"  = "AP Low, SUP High",
+                      "AP_low_Sup_low"   = "AP Low, SUP Low"
+                    )) +
+  scale_y_continuous(limits = c(0, 1), expand = expansion(mult = c(0, 0.02))) +
+  labs(
+    title = "Functional-state composition across myeloid clusters",
+    x = "Cluster",
+    y = "Proportion",
+    fill = "Functional state"
+  ) +
+  theme_nature +
+  theme(
+    axis.text.x = element_text(face = "bold"),
+    legend.position = "bottom",
+    legend.box = "horizontal",
+    legend.box.just = "center",
+    legend.justification = "center"
+  ) +
+  guides(fill = guide_legend(nrow = 1, byrow = TRUE, override.aes = list(alpha = 1)))
+save_figure(p, 
+            "../results/figures", 
+            "03_bar_functionalStateDistribution_by_cluster_myeloidCells", 
+            width = 7, height = 7)
 
 
 # Extract Ap_high_Sup_high cells markers for downstream analysis
@@ -383,34 +582,49 @@ genes_to_label <- unique(c(AP_GENES, SUP_GENES, top_novel_up))
 label_data <- plot_data %>% 
   filter(gene_symbol %in% genes_to_label & category != "Not Significant")
 
-ggplot(plot_data, aes(x = avg_log2FC, y = minus_log10_pval, color = category)) +
-  geom_point(data = subset(plot_data, category == "Not Significant"), 
-             size = 1, alpha = 0.3) +
-  geom_point(data = subset(plot_data, category != "Not Significant"), 
-             size = 2.5, alpha = 0.9) +
+p <- ggplot(plot_data, aes(x = avg_log2FC, y = minus_log10_pval, color = category)) +
+  geom_point(
+    data = subset(plot_data, category == "Not Significant"),
+    size = 0.5, alpha = 0.25
+  ) +
+  geom_point(
+    data = subset(plot_data, category != "Not Significant"),
+    size = 1, alpha = 0.9
+  ) +
   scale_color_manual(values = my_colors) +
-  geom_vline(xintercept = c(-logfc_cutoff, logfc_cutoff), lty = 2, col = "grey50", lwd = 0.5) +
-  geom_hline(yintercept = -log10(pval_cutoff), lty = 2, col = "grey50", lwd = 0.5) +
-  geom_text_repel(data = label_data,
-                  aes(label = gene_symbol),
-                  size = 3.5,
-                  box.padding = 0.5,
-                  max.overlaps = 30,
-                  fontface = "bold",
-                  show.legend = FALSE) +
-  theme_bw() +
-  theme(
-    panel.grid = element_blank(),
-    legend.position = "top",
-    legend.title = element_blank(),
-    axis.title = element_text(size = 12, face = "bold")
+  geom_vline(xintercept = c(-logfc_cutoff, logfc_cutoff), linetype = 2, color = "grey50", linewidth = 0.35) +
+  geom_hline(yintercept = -log10(pval_cutoff), linetype = 2, color = "grey50", linewidth = 0.35) +
+  geom_text_repel(
+    data = label_data,
+    aes(label = gene_symbol),
+    size = 2.6,
+    box.padding = 0.35,
+    point.padding = 0.2,
+    min.segment.length = 0,
+    segment.color = "grey60",
+    segment.size = 0.25,
+    max.overlaps = 30,
+    fontface = "bold",
+    show.legend = FALSE
   ) +
   labs(
-    x = "log2(Fold Change)", 
-    y = "-log10(Adjusted P-value)",
-    title = "Transcriptomic Signature: AP (Gold) vs SUP (Purple)",
-    subtitle = "Distinguishing defined markers form novel upregulated genes"
-  )
+    x = "log2 fold change",
+    y = expression(-log[10]("adjusted P-value")),
+    title = "Transcriptomic signature of AP-high, SUP-high myeloid state",
+    subtitle = "AP-high, SUP-high vs Others"
+  ) +
+  theme_nature +
+  theme(
+    legend.position = "top",
+    legend.box = "horizontal",
+    legend.box.just = "center",
+    legend.justification = "center",
+    legend.title = element_blank()
+  ) +
+  guides(color = guide_legend(nrow = 1, byrow = TRUE, override.aes = list(size = 2.4, alpha = 1)))
+save_figure(p, 
+            "../results/figures", 
+            "03_volcano_APSupHigh_vs_Others_myeloidCells", width = 9, height = 8)
 
 
 # Extract novel markers for bulk scoring
