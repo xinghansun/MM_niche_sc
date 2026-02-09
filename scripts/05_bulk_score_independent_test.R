@@ -93,9 +93,25 @@ validation_df$group_fixed <- ifelse(
 print(table(validation_df$group_fixed))
 
 fit_fixed <- survfit(Surv(os_days, os_status) ~ group_fixed, data = validation_df)
-p1 <- ggsurvplot(fit_fixed, data = validation_df, pval = TRUE, title = "Validation: Fixed Cutoff")
+svglite::svglite("../results/figures/05_MyeloidScore_TCGA-LAML_SurvivalCurve.svg", 
+                 width = 7, height = 6)
+ggsurvplot(fit_fixed, data = validation_df,
+           pval = TRUE,
+           risk.table = TRUE,
+           palette = c("#2E9FDF", "#E7B800"), 
+           #title = "Validation: Fixed Cutoff",
+           xlab = "Days")
+dev.off()
 
-print(p1)
+png("../results/figures/05_MyeloidScore_TCGA-LAML_SurvivalCurve.png", 
+    width = 7, height = 6, units = "in", res = 600)
+ggsurvplot(fit_fixed, data = validation_df,
+           pval = TRUE,
+           risk.table = TRUE,
+           palette = c("#2E9FDF", "#E7B800"), 
+           #title = "Validation: Fixed Cutoff",
+           xlab = "Days")
+dev.off()
 
 
 # uni continuous
