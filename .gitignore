@@ -14,3 +14,16 @@ software/pyscenic/vladoiu_mb.ipynb
 
 # ignore RDS object files
 *.[Rr][Dd][Ss]
+
+# R History files
+.RData
+.Ruserdata
+
+# renv library
+renv/library/
+renv/python/
+renv/staging/
+renv/local/
+
+# Rstudio files
+.Rproj.user/
