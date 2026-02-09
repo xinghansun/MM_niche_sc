@@ -9,6 +9,7 @@ suppressPackageStartupMessages({
   library(ggplot2)
   library(lubridate)
   library(survminer)
+  library(svglite)
 })
 
 # Load expression data
@@ -74,17 +75,28 @@ res.cut <- surv_cutpoint(df_ready,
                          variables = "State_Score")
 
 df_ready$group <- ifelse(df_ready$State_Score > res.cut$cutpoint$cutpoint, "High", "Low") # using res.cut
-#df_ready$group <- ifelse(df_ready$State_Score > median(df_ready$State_Score), "High", "Low") # using median
-#df_ready$group <- factor(df_ready$group, levels = c("Low", "High"))
 print(table(df_ready$group))
 fit <- survfit(Surv(os_days, os_status) ~ group, data = df_ready)
 
+svglite::svglite("../results/figures/04_MyeloidScore_GSE136337_SurvivalCurve.svg", 
+                 width = 7, height = 6)
 ggsurvplot(fit, data = df_ready,
            pval = TRUE,
            risk.table = TRUE,
            palette = c("#2E9FDF", "#E7B800"), 
-           title = "Survival Analysis: 10-Gene Myeloid State",
+           #title = "Survival Analysis: 10-Gene Myeloid State",
            xlab = "Days")
+dev.off()
+
+png("../results/figures/04_MyeloidScore_GSE136337_SurvivalCurve.png", 
+    width = 7, height = 6, units = "in", res = 600)
+ggsurvplot(fit, data = df_ready,
+           pval = TRUE,
+           risk.table = TRUE,
+           palette = c("#2E9FDF", "#E7B800"), 
+           #title = "Survival Analysis: 10-Gene Myeloid State",
+           xlab = "Days")
+dev.off()
 
 # Cox regression to confirm independence from myeloid abundance
 df_ready$group <- factor(df_ready$group, levels = c("Low", "High"))
