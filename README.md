@@ -6,11 +6,10 @@ This repository derives a myeloid functional-state gene signature of the High An
 
 Pipeline steps:
 
-1. Download GEO datasets (scRNA discovery/validation and bulk validation).
-2. Convert GEO raw files into Seurat objects.
+1. Download MMRF-COMMPASS and GEO datasets (scRNA and bulk RNA-seq).
+2. Convert GEO raw scRNA files into Seurat objects.
 3. In discovery scRNA (GSE124310), integrate samples (Harmony), subset myeloid cells, define AP/SUP functional states, and identify AP_high_Sup_high marker genes.
-4. In bulk cohort (GSE136337), compute GSVA state score, learn a risk cutoff (maxstat), perform survival analysis, and save a reusable risk model.
-5. Validate the saved risk model in an independent cohort (TCGA-LAML) using the fixed cutoff.
+4. In bulk cohort (MMRF-COMMPASS), compute GSVA state score, learn a risk cutoff (maxstat), perform survival analysis, and save selected gene signatures.
 
 All figures are saved to `../results/figures/` as:
 - SVG (vector)
@@ -69,14 +68,16 @@ This installs the versions pinned in `renv.lock`.
 ### `01_download_geo.R`
 
 Downloads:
-- scRNA discovery: `GSE124310` supplementary files
-- scRNA validation: `GSE163278` supplementary files
-- bulk validation: `GSE136337` series matrix (saved as RDS)
+- scRNA: `GSE124310` supplementary files
+- scRNA: `GSE163278` supplementary files
+- bulk RNA-seq: `GSE136337` series matrix
+- MMRF-COMMPASS
 
 Outputs:
 - `../data/geo/GSE124310/*`
 - `../data/geo/GSE163278/*`
 - `../data/geo/GSE136337/GSE136337_GSEMatrix.rds`
+- `../data/MMRF-COMMPASS`
 
 Run:
 ```r
@@ -128,7 +129,7 @@ source("03_mm_state_signature.R")
 
 ### `04_bulk_signature_score.R`
 
-Bulk scoring and survival analysis (GSE136337):
+Bulk scoring and survival analysis (MMRF-COMMPASS):
 
 - Load series matrix expression and phenotype data
 - Select refined novel markers from `03` output
@@ -147,23 +148,6 @@ Run:
 ```r
 source("utils.R")
 source("04_bulk_signature_score.R")
-```
-
-### `05_bulk_score_independent_test.R`
-
-Independent validation in TCGA-LAML:
-
-- Download and prepare TCGA-LAML expression counts (STAR counts)
-- Convert to log2-CPM and map Ensembl IDs to gene symbols
-- Load model from `../results/Myeloid_State_Risk_Model.rds`
-- Compute GSVA state scores and apply the fixed cutoff from the model
-- Survival curves and Cox models (uni/multi), including PH checks
-- figures saved under `../results/figures/`
-
-Run:
-```r
-source("utils.R")
-source("05_bulk_score_independent_test.R")
 ```
 
 ## Figure generation
@@ -186,5 +170,5 @@ save_figure(p, "../results/figures", "<figure_name>", width = <in>, height = <in
 
 ## Citation / data sources
 
-- GEO: GSE124310, GSE163278, GSE136337
-- TCGA: TCGA-LAML (downloaded via TCGAbiolinks)
+- GEO: GSE124310, GSE163278
+- MMRF-COMMPASS
