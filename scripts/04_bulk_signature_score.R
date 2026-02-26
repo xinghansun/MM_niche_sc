@@ -105,7 +105,7 @@ ggsurvplot(fit, data = final_df,
            pval = TRUE,
            risk.table = TRUE,
            palette = c("#2E9FDF", "#E7B800"), 
-           #title = "Survival Analysis: 10-Gene Myeloid State",
+           #title = "Survival Analysis: 7-Gene Myeloid State",
            xlab = "Days")
 dev.off()
 
@@ -115,13 +115,13 @@ ggsurvplot(fit, data = final_df,
            pval = TRUE,
            risk.table = TRUE,
            palette = c("#2E9FDF", "#E7B800"), 
-           #title = "Survival Analysis: 10-Gene Myeloid State",
+           #title = "Survival Analysis: 7-Gene Myeloid State",
            xlab = "Days")
 dev.off()
 
 # Cox regression to confirm independence from myeloid abundance
 final_df$group <- factor(final_df$group, levels = c("Low", "High"))
-# uni
+# uni binary
 cox_uni_group <- coxph(Surv(os_days, os_status) ~ group, data = final_df)
 summary(cox_uni_group)
 
@@ -129,12 +129,25 @@ zph <- cox.zph(cox_uni_group)
 print(zph)
 plot(zph)
 
-# multi
-cox_multi_group <- coxph(Surv(os_days, os_status) ~ group + Myeloid_Abundance, 
+# multi binary
+cox_multi_group <- coxph(Surv(os_days, os_status) ~ group + 
+                                                    Myeloid_Abundance +
+                                                    gender + age_at_index, 
                          data = final_df)
 summary(cox_multi_group)
 
 zph <- cox.zph(cox_multi_group)
+print(zph)
+plot(zph)
+
+# multi continuous
+cox_multi_continuous <- coxph(Surv(os_days, os_status) ~ State_Score + 
+                           Myeloid_Abundance +
+                           gender + age_at_index, 
+                         data = final_df)
+summary(cox_multi_continuous)
+
+zph <- cox.zph(cox_multi_continuous)
 print(zph)
 plot(zph)
 
