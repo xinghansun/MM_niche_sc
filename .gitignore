@@ -27,3 +27,6 @@ renv/local/
 
 # Rstudio files
 .Rproj.user/
+
+# intermediate files
+MANIFEST.txt
