@@ -13,6 +13,7 @@ suppressPackageStartupMessages({
   library(lubridate)
   library(survminer)
   library(svglite)
+  library(broom)
 })
 
 # Load expression data
@@ -97,6 +98,7 @@ res.cut <- surv_cutpoint(final_df,
 
 final_df$group <- ifelse(final_df$State_Score > res.cut$cutpoint$cutpoint, "High", "Low") # using res.cut
 print(table(final_df$group))
+
 fit <- survfit(Surv(os_days, os_status) ~ group, data = final_df)
 
 svglite::svglite("../results/figures/04_MyeloidScore_MMRF-COMMPASS_SurvivalCurve.svg", 
@@ -165,4 +167,144 @@ myeloid_model <- list(
 saveRDS(myeloid_model, "../results/Myeloid_State_Risk_Model.rds")
 
 
+# Plot State Score Distribution
+cutoff_value <- res.cut$cutpoint$cutpoint
+col_density <- "#4C72B0"
+col_cutoff  <- "#D62728"
 
+p <- ggplot(final_df, aes(x = State_Score)) +
+  geom_histogram(aes(y = after_stat(density)),
+                 bins = 30,
+                 fill = "grey80",
+                 color = "black",
+                 linewidth = 0.2,
+                 alpha = 0.6) +
+  geom_density(color = col_density,
+               linewidth = 1.2,
+               adjust = 1.2) +
+  geom_vline(xintercept = cutoff_value,
+             linetype = "dashed",
+             linewidth = 1,
+             color = col_cutoff) +
+  annotate("text",
+           x = cutoff_value,
+           y = Inf,
+           label = paste0("Cutoff = ", round(cutoff_value, 3)),
+           vjust = 2,
+           hjust = -0.05,
+           size = 5,
+           color = col_cutoff,
+           fontface = "bold") +
+  theme_classic(base_size = 16) +
+  theme(
+    axis.title = element_text(face = "bold"),
+    axis.text  = element_text(color = "black"),
+    plot.margin = margin(10, 20, 10, 10)
+  ) +
+  labs(
+    x = "State Score",
+    y = "Density"
+  )
+
+svglite::svglite("../results/figures/04_MyeloidScore_MMRF-COMMPASS_StateScoreDistribution.svg", 
+                 width = 6, height = 5)
+p
+dev.off()
+png("../results/figures/04_MyeloidScore_MMRF-COMMPASS_StateScoreDistribution.png", 
+    width = 6, height = 5, units = "in", res = 600)
+p
+dev.off()
+
+
+# Plot Forest Plot for Multi-var Cox Model
+cox_summary <- tidy(cox_multi_continuous, 
+                    exponentiate = TRUE, 
+                    conf.int = TRUE)
+
+forest_df <- cox_summary %>%
+  filter(term != "(Intercept)") %>%
+  mutate(
+    term = case_when(
+      term == "State_Score" ~ "AP/SUP-High State Score",
+      term == "Myeloid_Abundance" ~ "Myeloid Abundance Score",
+      term == "gendermale" ~ "Gender (Male vs Female)",
+      term == "age_at_index" ~ "Age (Year)",
+      TRUE ~ term
+    ),
+    term = factor(term, levels = rev(term)),
+    p_label = ifelse(p.value < 0.001,
+                     "P < 0.001",
+                     paste0("P = ", sprintf("%.3f", p.value)))
+  )
+
+x_max <- max(forest_df$conf.high) * 1.6
+x_min <- min(forest_df$conf.low) * 0.8
+
+p_forest <- ggplot(forest_df, aes(x = estimate, y = term)) +
+  geom_vline(xintercept = 1,
+             linetype = "dashed",
+             linewidth = 0.8,
+             color = "grey40") +
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high),
+                 height = 0.2,
+                 linewidth = 1) +
+  geom_point(size = 3) +
+  geom_text(aes(x = x_max, label = p_label),
+            hjust = 1,
+            size = 5) +
+  scale_x_log10(limits = c(x_min, x_max)) +
+  theme_classic(base_size = 16) +
+  theme(
+    axis.title = element_text(face = "bold"),
+    axis.text  = element_text(color = "black"),
+    plot.margin = margin(10, 20, 10, 10)
+  ) +
+  labs(
+    x = "Hazard Ratio (log scale)",
+    y = NULL
+  )
+
+svglite::svglite("../results/figures/04_MyeloidScore_MMRF-COMMPASS_CoxForestPlot.svg", 
+                 width = 10, height = 5)
+p_forest
+dev.off()
+png("../results/figures/04_MyeloidScore_MMRF-COMMPASS_CoxForestPlot.png", 
+    width = 10, height = 5, units = "in", res = 600)
+p_forest
+dev.off()
+
+
+# Export Multi-var Cox Model Summary
+cox_table <- tidy(cox_multi_continuous,
+                  exponentiate = TRUE,
+                  conf.int = TRUE) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(
+    Variable = case_when(
+      term == "State_Score" ~ "AP/SUP-High State Score",
+      term == "Myeloid_Abundance" ~ "Myeloid Abundance Score",
+      term == "gendermale" ~ "Gender (Male vs Female)",
+      term == "age_at_index" ~ "Age (Year)",
+      TRUE ~ term
+    ),
+    `Hazard Ratio` = round(estimate, 3),
+    `Lower 95% CI` = round(conf.low, 3),
+    `Upper 95% CI` = round(conf.high, 3),
+    `P value` = p.value
+  ) %>%
+  select(Variable,
+         `Hazard Ratio`,
+         `Lower 95% CI`,
+         `Upper 95% CI`,
+         `P value`)
+
+write.csv(cox_table,
+          "../results/04_MyeloidScore_MMRF-COMMPASS_MultiVarCoxModelSummary.csv",
+          row.names = FALSE)
+
+# Export AP/SUP-High State Score Signature Gene List
+write.table(final_genes$State_Score,
+            "../results/04_MyeloidScore_MMRF-COMMPASS_StateScoreSignatureGenes.txt",
+            quote = FALSE,
+            row.names = FALSE,
+            col.names = FALSE)
